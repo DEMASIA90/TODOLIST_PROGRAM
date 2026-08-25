@@ -1,0 +1,85 @@
+name: Build Windows Standalone Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build installed app
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --windowed `
+            --name AutoTodoDesktop `
+            --distpath dist_onedir `
+            --workpath build_onedir `
+            main.py
+
+      - name: Build portable EXE
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --windowed `
+            --onefile `
+            --name AutoTodoDesktop_Portable `
+            --distpath dist_portable `
+            --workpath build_portable `
+            main.py
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+
+          if (!(Test-Path $iscc)) {
+            $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          }
+
+          & $iscc "installer.iss"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTodoDesktop-Windows-Installer
+          path: Output/AutoTodoDesktop_Setup.exe
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTodoDesktop-Windows-Portable
+          path: dist_portable/AutoTodoDesktop_Portable.exe
